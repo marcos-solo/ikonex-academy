@@ -8,30 +8,29 @@ const setupDB = async () => {
             host: process.env.DB_HOST || 'localhost',
             user: process.env.DB_USER || 'root',
             password: process.env.DB_PASSWORD || '',
-            port: 3306
+            port: parseInt(process.env.DB_PORT || '3306'),
+            ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
         });
 
         console.log('🔧 Setting up database...\n');
 
         // Create database if it doesn't exist
         const dbName = process.env.DB_NAME || 'assessment';
-        await connection.execute(`CREATE DATABASE IF NOT EXISTS ${dbName}`);
+        await connection.execute(`CREATE DATABASE IF NOT EXISTS \`${dbName}\``);
         console.log(`✅ Database '${dbName}' created/verified`);
 
         // Use the database
         await connection.changeUser({ database: dbName });
 
-        // Create streams table
+        // Create class_streams table (matching your route files)
         await connection.execute(`
-            CREATE TABLE IF NOT EXISTS streams (
+            CREATE TABLE IF NOT EXISTS class_streams (
                 id INT PRIMARY KEY AUTO_INCREMENT,
                 name VARCHAR(100) NOT NULL UNIQUE,
-                code VARCHAR(20) NOT NULL UNIQUE,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);
-        console.log('✅ Table "streams" created/verified');
+        console.log('✅ Table "class_streams" created/verified');
 
         // Create students table
         await connection.execute(`
@@ -40,36 +39,11 @@ const setupDB = async () => {
                 admission_number VARCHAR(50) NOT NULL UNIQUE,
                 full_name VARCHAR(100) NOT NULL,
                 stream_id INT,
-                email VARCHAR(100),
-                phone VARCHAR(20),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                FOREIGN KEY (stream_id) REFERENCES streams(id) ON DELETE SET NULL
+                FOREIGN KEY (stream_id) REFERENCES class_streams(id) ON DELETE SET NULL
             )
         `);
         console.log('✅ Table "students" created/verified');
-
-        // Fix old student foreign key references to class_streams if present
-        const [foreignKeys] = await connection.query(`
-            SELECT CONSTRAINT_NAME, REFERENCED_TABLE_NAME
-            FROM information_schema.KEY_COLUMN_USAGE
-            WHERE TABLE_SCHEMA = ?
-              AND TABLE_NAME = 'students'
-              AND COLUMN_NAME = 'stream_id'
-              AND REFERENCED_TABLE_NAME != 'streams'
-        `, [dbName]);
-
-        if (foreignKeys.length > 0) {
-            for (const fk of foreignKeys) {
-                await connection.query('ALTER TABLE students DROP FOREIGN KEY `' + fk.CONSTRAINT_NAME + '`');
-            }
-            await connection.query(`
-                ALTER TABLE students
-                ADD CONSTRAINT students_ibfk_1
-                FOREIGN KEY (stream_id) REFERENCES streams(id) ON DELETE SET NULL
-            `);
-            console.log('✅ Updated students foreign key to reference streams');
-        }
 
         // Create subjects table
         await connection.execute(`
@@ -77,40 +51,36 @@ const setupDB = async () => {
                 id INT PRIMARY KEY AUTO_INCREMENT,
                 name VARCHAR(100) NOT NULL UNIQUE,
                 code VARCHAR(20) NOT NULL UNIQUE,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);
         console.log('✅ Table "subjects" created/verified');
 
-        // Create stream_subjects table for assigning subjects to streams
+        // Create stream_subjects table
         await connection.execute(`
             CREATE TABLE IF NOT EXISTS stream_subjects (
-                id INT PRIMARY KEY AUTO_INCREMENT,
                 stream_id INT NOT NULL,
                 subject_id INT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE KEY unique_stream_subject (stream_id, subject_id),
-                FOREIGN KEY (stream_id) REFERENCES streams(id) ON DELETE CASCADE,
+                PRIMARY KEY (stream_id, subject_id),
+                FOREIGN KEY (stream_id) REFERENCES class_streams(id) ON DELETE CASCADE,
                 FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE
             )
         `);
         console.log('✅ Table "stream_subjects" created/verified');
 
-        // Create grading scale table for configurable grades
+        // Create grading_scale table
         await connection.execute(`
             CREATE TABLE IF NOT EXISTS grading_scale (
                 id INT PRIMARY KEY AUTO_INCREMENT,
                 min_score DECIMAL(5, 2) NOT NULL,
                 max_score DECIMAL(5, 2) NOT NULL,
                 grade VARCHAR(5) NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE KEY unique_grade_range (min_score, max_score)
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);
         console.log('✅ Table "grading_scale" created/verified');
 
-        // Seed grading scale defaults if empty
+        // Seed grading scale
         const [grades] = await connection.query('SELECT COUNT(*) as count FROM grading_scale');
         if (grades[0].count === 0) {
             await connection.query(`INSERT INTO grading_scale (min_score, max_score, grade) VALUES
@@ -129,10 +99,9 @@ const setupDB = async () => {
                 id INT PRIMARY KEY AUTO_INCREMENT,
                 student_id INT NOT NULL,
                 subject_id INT NOT NULL,
-                exam_type VARCHAR(50) NOT NULL,
+                exam_type ENUM('CA1', 'CA2', 'EXAM') NOT NULL,
                 score DECIMAL(5, 2) NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
                 FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE,
                 UNIQUE KEY unique_exam_score (student_id, subject_id, exam_type)
@@ -140,11 +109,34 @@ const setupDB = async () => {
         `);
         console.log('✅ Table "scores" created/verified');
 
+        // Insert sample data if empty
+        const [streamCount] = await connection.query('SELECT COUNT(*) as count FROM class_streams');
+        if (streamCount[0].count === 0) {
+            await connection.query(`INSERT INTO class_streams (name) VALUES
+                ('Form 1A'),
+                ('Form 1B'),
+                ('Form 2A')
+            `);
+            console.log('✅ Sample class streams added');
+        }
+
+        const [subjectCount] = await connection.query('SELECT COUNT(*) as count FROM subjects');
+        if (subjectCount[0].count === 0) {
+            await connection.query(`INSERT INTO subjects (name, code) VALUES
+                ('Mathematics', 'MATH101'),
+                ('English', 'ENG101'),
+                ('Science', 'SCI101'),
+                ('History', 'HIST101')
+            `);
+            console.log('✅ Sample subjects added');
+        }
+
         console.log('\n✨ Database setup completed successfully!');
         await connection.end();
         process.exit(0);
     } catch (error) {
         console.error('❌ Database setup failed:', error.message);
+        console.error(error);
         process.exit(1);
     }
 };
