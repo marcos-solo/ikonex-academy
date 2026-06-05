@@ -6,7 +6,7 @@ const pool = require('../config/db');
 router.get('/', async (req, res) => {
     try {
         const connection = await pool.getConnection();
-        const [streams] = await connection.query('SELECT * FROM streams ORDER BY name');
+        const [streams] = await connection.query('SELECT * FROM class_streams ORDER BY name');
         connection.release();
         res.json({ success: true, data: streams });
     } catch (error) {
@@ -19,7 +19,7 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
     try {
         const connection = await pool.getConnection();
-        const [streams] = await connection.query('SELECT * FROM streams WHERE id = ?', [req.params.id]);
+        const [streams] = await connection.query('SELECT * FROM class_streams WHERE id = ?', [req.params.id]);
 
         if (streams.length === 0) {
             connection.release();
@@ -66,7 +66,7 @@ router.post('/', async (req, res) => {
         }
 
         const connection = await pool.getConnection();
-        const result = await connection.query('INSERT INTO streams (name, code) VALUES (?, ?)', [name, code]);
+        const result = await connection.query('INSERT INTO class_streams (name, code) VALUES (?, ?)', [name, code]);
         connection.release();
 
         res.status(201).json({ 
@@ -91,7 +91,7 @@ router.put('/:id', async (req, res) => {
         }
 
         const connection = await pool.getConnection();
-        const [result] = await connection.query('UPDATE streams SET name = ?, code = ? WHERE id = ?', [name, code, id]);
+        const [result] = await connection.query('UPDATE class_streams SET name = ?, code = ? WHERE id = ?', [name, code, id]);
         connection.release();
 
         if (result.affectedRows === 0) {
@@ -110,7 +110,7 @@ router.delete('/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const connection = await pool.getConnection();
-        const [result] = await connection.query('DELETE FROM streams WHERE id = ?', [id]);
+        const [result] = await connection.query('DELETE FROM class_streams WHERE id = ?', [id]);
         connection.release();
 
         if (result.affectedRows === 0) {
