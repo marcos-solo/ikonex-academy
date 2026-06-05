@@ -243,14 +243,16 @@ router.get('/class-report/:streamId', async (req, res) => {
         for (let i = 0; i < students.length; i++) {
             const student = students[i];
             const rank = i + 1;
-            let average = student.average_score || 0;
+            const average = parseFloat(student.average_score) || 0;
             
             let grade = 'N/A';
-            if (average >= 80) grade = 'A';
-            else if (average >= 70) grade = 'B';
-            else if (average >= 50) grade = 'C';
-            else if (average >= 40) grade = 'D';
-            else if (average > 0) grade = 'F';
+            if (!isNaN(average) && average > 0) {
+                if (average >= 80) grade = 'A';
+                else if (average >= 70) grade = 'B';
+                else if (average >= 50) grade = 'C';
+                else if (average >= 40) grade = 'D';
+                else if (average > 0) grade = 'F';
+            }
             
             if (rowColor) {
                 doc.rect(startX, y - 2, 700, 25).fill('#f5f5f5');
@@ -293,7 +295,7 @@ router.get('/class-report/:streamId', async (req, res) => {
         y += 15;
         
         const totalStudents = students.length;
-        const totalMarksSum = students.reduce((sum, s) => sum + s.total_marks, 0);
+        const totalMarksSum = students.reduce((sum, s) => sum + (parseFloat(s.total_marks) || 0), 0);
         const avgClassScore = totalStudents > 0 ? totalMarksSum / totalStudents : 0;
         const topStudent = students[0]?.full_name || 'N/A';
         const topMarks = students[0]?.total_marks || 0;
