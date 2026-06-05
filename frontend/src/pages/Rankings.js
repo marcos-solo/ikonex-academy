@@ -16,13 +16,11 @@ function Rankings() {
                 console.error('Error fetching streams:', error);
             }
         };
-
         fetchStreams();
     }, []);
 
     useEffect(() => {
         if (!selectedStream) return;
-
         const fetchRankings = async () => {
             setLoading(true);
             try {
@@ -34,9 +32,21 @@ function Rankings() {
                 setLoading(false);
             }
         };
-
         fetchRankings();
     }, [selectedStream]);
+
+    const downloadClassReport = async () => {
+        if (!selectedStream) {
+            alert('Please select a stream first');
+            return;
+        }
+        try {
+            window.open(`https://ikonex-academy-1.onrender.com/api/reports/class-report/${selectedStream}`, '_blank');
+        } catch (error) {
+            console.error('Error downloading report:', error);
+            alert('Failed to download class report');
+        }
+    };
 
     const getGradeColor = (average) => {
         if (average >= 80) return '#48bb78';
@@ -50,6 +60,9 @@ function Rankings() {
             <div className="card">
                 <div className="card-header">
                     <h1 className="card-title">Class Rankings</h1>
+                    <button className="btn btn-success" onClick={downloadClassReport}>
+                        📊 Download Class Report (PDF)
+                    </button>
                 </div>
 
                 <div className="form-group" style={{ marginBottom: '20px' }}>
@@ -75,44 +88,42 @@ function Rankings() {
                     <div className="table-responsive">
                         <table className="table">
                             <thead>
-                            <tr>
-                                <th>Rank</th>
-                                <th>Admission No</th>
-                                <th>Student Name</th>
-                                <th>Total Marks</th>
-                                <th>Average Score</th>
-                                <th>Subjects Taken</th>
-                                <th>Grade</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {rankings.map(student => (
-                                <tr key={student.id}>
-                                    <td>
-                                        <strong>#{student.rank}</strong>
-                                    </td>
-                                    <td>{student.admission_number}</td>
-                                    <td>{student.full_name}</td>
-                                    <td>{student.total_marks}</td>
-                                    <td>{student.average_score}%</td>
-                                    <td>{student.subjects_taken}</td>
-                                    <td>
-                                        <span style={{
-                                            background: getGradeColor(student.average_score),
-                                            color: 'white',
-                                            padding: '5px 10px',
-                                            borderRadius: '5px',
-                                            fontWeight: 'bold'
-                                        }}>
-                                            {student.average_score >= 80 ? 'A' :
-                                             student.average_score >= 70 ? 'B' :
-                                             student.average_score >= 50 ? 'C' :
-                                             student.average_score >= 40 ? 'D' : 'F'}
-                                        </span>
-                                    </td>
+                                <tr>
+                                    <th>Rank</th>
+                                    <th>Admission No</th>
+                                    <th>Student Name</th>
+                                    <th>Total Marks</th>
+                                    <th>Average Score</th>
+                                    <th>Subjects Taken</th>
+                                    <th>Grade</th>
                                 </tr>
-                            ))}
-                        </tbody>
+                            </thead>
+                            <tbody>
+                                {rankings.map(student => (
+                                    <tr key={student.id}>
+                                        <td><strong>#{student.rank}</strong></td>
+                                        <td>{student.admission_number}</td>
+                                        <td>{student.full_name}</td>
+                                        <td>{student.total_marks}</td>
+                                        <td>{student.average_score}%</td>
+                                        <td>{student.subjects_taken}</td>
+                                        <td>
+                                            <span style={{
+                                                background: getGradeColor(student.average_score),
+                                                color: 'white',
+                                                padding: '5px 10px',
+                                                borderRadius: '5px',
+                                                fontWeight: 'bold'
+                                            }}>
+                                                {student.average_score >= 80 ? 'A' :
+                                                 student.average_score >= 70 ? 'B' :
+                                                 student.average_score >= 50 ? 'C' :
+                                                 student.average_score >= 40 ? 'D' : 'F'}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
                         </table>
                     </div>
                 )}
