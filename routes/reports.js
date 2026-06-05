@@ -78,13 +78,11 @@ router.get('/student-report/:studentId', async (req, res) => {
         
         doc.pipe(res);
         
-        // Header with border
         doc.rect(50, 45, 495, 80).stroke();
         doc.fontSize(24).font('Helvetica-Bold').fillColor('#1a237e').text('IKONEX ACADEMY', 70, 60);
         doc.fontSize(12).font('Helvetica').fillColor('#666666').text('Student Progress Report Card', 70, 95);
         doc.fontSize(9).fillColor('#999999').text('Excellence in Education', 70, 115);
         
-        // Student Info Section
         doc.fontSize(10).font('Helvetica-Bold').fillColor('#333333').text('STUDENT INFORMATION', 50, 160);
         doc.moveTo(50, 168).lineTo(545, 168).stroke();
         
@@ -98,11 +96,9 @@ router.get('/student-report/:studentId', async (req, res) => {
         doc.text('Report Date:', 380, 180);
         doc.text(`${new Date().toLocaleDateString()}`, 460, 180);
         
-        // Academic Performance Section
         doc.fontSize(10).font('Helvetica-Bold').fillColor('#333333').text('ACADEMIC PERFORMANCE', 50, 245);
         doc.moveTo(50, 253).lineTo(545, 253).stroke();
         
-        // Table Header
         let y = 270;
         doc.fontSize(9).font('Helvetica-Bold').fillColor('#ffffff');
         doc.rect(50, y, 100, 20).fill('#1a237e');
@@ -121,7 +117,6 @@ router.get('/student-report/:studentId', async (req, res) => {
         
         y += 20;
         
-        // Table Rows
         doc.fontSize(9).font('Helvetica').fillColor('#333333');
         let rowColor = false;
         Object.entries(subjectTotals).forEach(([subject, scores]) => {
@@ -151,7 +146,6 @@ router.get('/student-report/:studentId', async (req, res) => {
         
         y += 10;
         
-        // Summary Section
         doc.fontSize(10).font('Helvetica-Bold').fillColor('#333333').text('SUMMARY', 50, y);
         doc.moveTo(50, y + 8).lineTo(545, y + 8).stroke();
         
@@ -166,17 +160,16 @@ router.get('/student-report/:studentId', async (req, res) => {
         doc.text(`${percentage.toFixed(1)}%`, 220, y + 18);
         
         doc.text('Grade:', 60, y + 36);
-        const gradeColor = grade === 'A' ? '#2e7d32' : grade === 'B' ? '#1565c0' : grade === 'C' ? '#ed6c02' : grade === 'D' ? '#ed6c02' : '#d32f2f';
+        const gradeColor = grade === 'A' ? '#2e7d32' : grade === 'B' ? '#1565c0' : grade === 'C' ? '#ed6c02' : '#d32f2f';
         doc.fillColor(gradeColor).text(grade, 220, y + 36);
         
         doc.fillColor('#333333');
         doc.text('Class Position:', 350, y);
-        doc.text(position === 'N/A' ? 'Not Ranked' : `${position} of ${students.length}`, 460, y);
+        doc.text(position === 'N/A' ? 'Not Ranked' : `${position}`, 460, y);
         
         doc.text('Subjects Offered:', 350, y + 18);
         doc.text(`${subjectCount}`, 460, y + 18);
         
-        // Footer
         const footerY = doc.page.height - 50;
         doc.fontSize(8).fillColor('#999999').text('This is an electronically generated report card. No signature is required.', 50, footerY, { align: 'center', width: 495 });
         doc.text(`Generated on ${new Date().toLocaleString()}`, 50, footerY + 15, { align: 'center', width: 495 });
@@ -202,8 +195,7 @@ router.get('/class-report/:streamId', async (req, res) => {
                 s.full_name,
                 s.admission_number,
                 COALESCE(SUM(sc.score), 0) as total_marks,
-                AVG(sc.score) as average_score,
-                COUNT(DISTINCT sc.subject_id) as subjects_taken
+                AVG(sc.score) as average_score
             FROM students s
             LEFT JOIN scores sc ON s.id = sc.student_id
             WHERE s.stream_id = ?
@@ -218,37 +210,41 @@ router.get('/class-report/:streamId', async (req, res) => {
         
         doc.pipe(res);
         
-        // Header
         doc.fontSize(22).font('Helvetica-Bold').fillColor('#1a237e').text('IKONEX ACADEMY', { align: 'center' });
         doc.fontSize(14).fillColor('#666666').text(`Class Performance Report - ${streamName}`, { align: 'center' });
         doc.fontSize(10).fillColor('#999999').text(`Generated: ${new Date().toLocaleDateString()}`, { align: 'center' });
         doc.moveDown();
         
-        // Table Header - Fixed Alignment
         let startX = 50;
-        let y = doc.y + 10;
+        let y = doc.y + 15;
         
-        doc.rect(startX, y, 700, 28).fill('#1a237e');
+        doc.rect(startX, y, 700, 30).fill('#1a237e');
+        
+        const col1X = startX + 20;
+        const col2X = startX + 80;
+        const col3X = startX + 230;
+        const col4X = startX + 420;
+        const col5X = startX + 520;
+        const col6X = startX + 610;
         
         doc.fontSize(10).font('Helvetica-Bold').fillColor('#ffffff');
-        doc.text('RANK', startX + 25, y + 9);
-        doc.text('ADMISSION NUMBER', startX + 95, y + 9);
-        doc.text('STUDENT NAME', startX + 230, y + 9);
-        doc.text('TOTAL MARKS', startX + 420, y + 9);
-        doc.text('AVERAGE', startX + 530, y + 9);
-        doc.text('GRADE', startX + 620, y + 9);
+        doc.text('RANK', col1X + 5, y + 10);
+        doc.text('ADMISSION NUMBER', col2X, y + 10);
+        doc.text('STUDENT NAME', col3X, y + 10);
+        doc.text('TOTAL MARKS', col4X, y + 10);
+        doc.text('AVERAGE', col5X + 10, y + 10);
+        doc.text('GRADE', col6X + 10, y + 10);
         
-        y += 28;
+        y += 30;
         
-        // Table Rows
         doc.fontSize(9).font('Helvetica').fillColor('#333333');
         let rowColor = false;
         
         for (let i = 0; i < students.length; i++) {
             const student = students[i];
             const rank = i + 1;
-            
             let average = student.average_score || 0;
+            
             let grade = 'N/A';
             if (average >= 80) grade = 'A';
             else if (average >= 70) grade = 'B';
@@ -257,46 +253,45 @@ router.get('/class-report/:streamId', async (req, res) => {
             else if (average > 0) grade = 'F';
             
             if (rowColor) {
-                doc.rect(startX, y - 2, 700, 24).fill('#f5f5f5');
+                doc.rect(startX, y - 2, 700, 25).fill('#f5f5f5');
             }
             
             doc.fillColor('#333333');
-            doc.text(rank.toString(), startX + 30, y);
-            doc.text(student.admission_number, startX + 95, y);
+            doc.text(rank.toString(), col1X + 10, y + 5);
+            doc.text(student.admission_number, col2X, y + 5);
             
             let studentName = student.full_name;
-            if (studentName.length > 28) {
-                studentName = studentName.substring(0, 25) + '...';
+            if (studentName.length > 30) {
+                studentName = studentName.substring(0, 27) + '...';
             }
-            doc.text(studentName, startX + 230, y);
-            doc.text(student.total_marks.toString(), startX + 440, y);
-            doc.text(`${average.toFixed(1)}%`, startX + 540, y);
+            doc.text(studentName, col3X, y + 5);
+            doc.text(student.total_marks.toString(), col4X + 15, y + 5);
+            doc.text(`${average.toFixed(1)}%`, col5X + 20, y + 5);
             
-            doc.fillColor(grade === 'A' ? '#2e7d32' : grade === 'B' ? '#1565c0' : grade === 'C' ? '#ed6c02' : grade === 'D' ? '#ed6c02' : '#d32f2f');
-            doc.text(grade, startX + 635, y);
+            const gradeColor = grade === 'A' ? '#2e7d32' : grade === 'B' ? '#1565c0' : grade === 'C' ? '#ed6c02' : '#d32f2f';
+            doc.fillColor(gradeColor);
+            doc.text(grade, col6X + 20, y + 5);
             
-            y += 24;
+            y += 25;
             rowColor = !rowColor;
             
             if (y > doc.page.height - 100) {
                 doc.addPage();
                 y = 50;
-                
-                doc.rect(startX, y, 700, 28).fill('#1a237e');
+                doc.rect(startX, y, 700, 30).fill('#1a237e');
                 doc.fontSize(10).font('Helvetica-Bold').fillColor('#ffffff');
-                doc.text('RANK', startX + 25, y + 9);
-                doc.text('ADMISSION NUMBER', startX + 95, y + 9);
-                doc.text('STUDENT NAME', startX + 230, y + 9);
-                doc.text('TOTAL MARKS', startX + 420, y + 9);
-                doc.text('AVERAGE', startX + 530, y + 9);
-                doc.text('GRADE', startX + 620, y + 9);
-                y += 28;
+                doc.text('RANK', col1X + 5, y + 10);
+                doc.text('ADMISSION NUMBER', col2X, y + 10);
+                doc.text('STUDENT NAME', col3X, y + 10);
+                doc.text('TOTAL MARKS', col4X, y + 10);
+                doc.text('AVERAGE', col5X + 10, y + 10);
+                doc.text('GRADE', col6X + 10, y + 10);
+                y += 30;
             }
         }
         
         y += 15;
         
-        // Summary Section
         const totalStudents = students.length;
         const totalMarksSum = students.reduce((sum, s) => sum + s.total_marks, 0);
         const avgClassScore = totalStudents > 0 ? totalMarksSum / totalStudents : 0;
@@ -307,15 +302,12 @@ router.get('/class-report/:streamId', async (req, res) => {
         y += 20;
         
         doc.fontSize(10).font('Helvetica').fillColor('#333333');
-        doc.text(`Total Students Enrolled: ${totalStudents}`, startX + 10, y);
-        doc.text(`Class Average Score: ${avgClassScore.toFixed(1)} marks`, startX + 250, y);
+        doc.text(`Total Students: ${totalStudents}`, startX + 10, y);
+        doc.text(`Class Average: ${avgClassScore.toFixed(1)} marks`, startX + 250, y);
         y += 20;
-        doc.text(`Top Performer: ${topStudent}`, startX + 10, y);
+        doc.text(`Top Student: ${topStudent}`, startX + 10, y);
         doc.text(`Highest Score: ${topMarks} marks`, startX + 250, y);
-        y += 20;
-        doc.text(`Students with Scores: ${students.filter(s => s.total_marks > 0).length}`, startX + 10, y);
         
-        // Footer
         const footerY = doc.page.height - 40;
         doc.fontSize(8).fillColor('#999999').text('This is an electronically generated class performance report.', startX, footerY, { align: 'center', width: 700 });
         
@@ -323,7 +315,7 @@ router.get('/class-report/:streamId', async (req, res) => {
         
     } catch (error) {
         console.error('Error generating class report:', error);
-        res.status(500).json({ success: false, message: 'Error generating report', error: error.message });
+        res.status(500).json({ success: false, message: 'Error generating report' });
     }
 });
 
