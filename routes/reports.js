@@ -3,12 +3,10 @@ const router = express.Router();
 const pool = require('../config/db');
 const PDFDocument = require('pdfkit');
 
-// Generate individual student report card
 router.get('/student-report/:studentId', async (req, res) => {
     try {
         const { studentId } = req.params;
         
-        // Get student info
         const [studentRows] = await pool.query(`
             SELECT s.*, st.name as stream_name 
             FROM students s
@@ -22,16 +20,14 @@ router.get('/student-report/:studentId', async (req, res) => {
         
         const student = studentRows[0];
         
-        // Get student scores with subjects
         const [scoreRows] = await pool.query(`
-            SELECT sc.*, sub.name as subject_name, sub.code as subject_code
+            SELECT sc.*, sub.name as subject_name
             FROM scores sc
             INNER JOIN subjects sub ON sc.subject_id = sub.id
             WHERE sc.student_id = ?
             ORDER BY sub.name
         `, [studentId]);
         
-        // Calculate totals per subject
         const subjectTotals = {};
         scoreRows.forEach(score => {
             if (!subjectTotals[score.subject_name]) {
@@ -46,7 +42,6 @@ router.get('/student-report/:studentId', async (req, res) => {
                 subjectTotals[score.subject_name].exam;
         });
         
-        // Calculate overall total and average
         let overallTotal = 0;
         let subjectCount = 0;
         Object.values(subjectTotals).forEach(subj => {
@@ -55,21 +50,17 @@ router.get('/student-report/:studentId', async (req, res) => {
         });
         const overallAverage = subjectCount > 0 ? overallTotal / subjectCount : 0;
         
-        // Get grade
         let grade = 'N/A';
         if (overallAverage >= 80) grade = 'A';
         else if (overallAverage >= 70) grade = 'B';
         else if (overallAverage >= 50) grade = 'C';
         else if (overallAverage >= 40) grade = 'D';
-        else grade = 'F';
+        else if (overallAverage > 0) grade = 'F';
         
-        // Get class position
         let position = 'N/A';
         if (student.stream_id) {
             const [rankings] = await pool.query(`
-                SELECT 
-                    s.id,
-                    COALESCE(SUM(sc.score), 0) as total
+                SELECT s.id, COALESCE(SUM(sc.score), 0) as total
                 FROM students s
                 LEFT JOIN scores sc ON s.id = sc.student_id
                 WHERE s.stream_id = ?
@@ -80,61 +71,118 @@ router.get('/student-report/:studentId', async (req, res) => {
             position = studentRank + 1;
         }
         
-        // Create PDF
-        const doc = new PDFDocument({ margin: 50 });
+        const doc = new PDFDocument({ margin: 50, size: 'A4' });
         
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', `attachment; filename=report_card_${student.admission_number}.pdf`);
         
         doc.pipe(res);
         
-        // Header
-        doc.fontSize(20).text('IKONEX ACADEMY', { align: 'center' });
-        doc.fontSize(14).text('Student Report Card', { align: 'center' });
-        doc.moveDown();
+        // Header with border
+        doc.rect(50, 45, 495, 80).stroke();
+        doc.fontSize(24).font('Helvetica-Bold').fillColor('#1a237e').text('IKONEX ACADEMY', 70, 60);
+        doc.fontSize(12).font('Helvetica').fillColor('#666666').text('Student Progress Report Card', 70, 95);
         
-        // Student Info
-        doc.fontSize(12).text(`Name: ${student.full_name}`);
-        doc.text(`Admission Number: ${student.admission_number}`);
-        doc.text(`Stream: ${student.stream_name || 'Not Assigned'}`);
-        doc.text(`Date: ${new Date().toLocaleDateString()}`);
-        doc.moveDown();
+        // School motto
+        doc.fontSize(9).fillColor('#999999').text('Excellence in Education', 70, 115);
         
-        // Subject Scores Table
-        doc.fontSize(12).text('Academic Performance:', { underline: true });
-        doc.moveDown(0.5);
+        // Student Info Section
+        doc.fontSize(10).font('Helvetica-Bold').fillColor('#333333').text('STUDENT INFORMATION', 50, 160);
+        doc.moveTo(50, 168).lineTo(545, 168).stroke();
         
-        // Table headers
-        let y = doc.y;
-        doc.text('Subject', 50, y);
-        doc.text('CA1', 250, y);
-        doc.text('CA2', 320, y);
-        doc.text('Exam', 390, y);
-        doc.text('Total', 460, y);
+        doc.fontSize(10).font('Helvetica').fillColor('#444444');
+        doc.text('Student Name:', 60, 180);
+        doc.text(`${student.full_name}`, 200, 180);
+        doc.text('Admission No:', 60, 195);
+        doc.text(`${student.admission_number}`, 200, 195);
+        doc.text('Class Stream:', 60, 210);
+        doc.text(`${student.stream_name || 'Not Assigned'}`, 200, 210);
+        doc.text('Report Date:', 380, 180);
+        doc.text(`${new Date().toLocaleDateString()}`, 460, 180);
         
-        doc.moveDown();
+        // Academic Performance Section
+        doc.fontSize(10).font('Helvetica-Bold').fillColor('#333333').text('ACADEMIC PERFORMANCE', 50, 245);
+        doc.moveTo(50, 253).lineTo(545, 253).stroke();
         
-        // Table rows
+        // Table Header
+        let y = 270;
+        doc.fontSize(9).font('Helvetica-Bold').fillColor('#ffffff');
+        doc.rect(50, y, 100, 20).fill('#1a237e');
+        doc.rect(150, y, 80, 20).fill('#1a237e');
+        doc.rect(230, y, 80, 20).fill('#1a237e');
+        doc.rect(310, y, 80, 20).fill('#1a237e');
+        doc.rect(390, y, 80, 20).fill('#1a237e');
+        doc.rect(470, y, 75, 20).fill('#1a237e');
+        
+        doc.fillColor('#ffffff').text('Subject', 55, y + 5);
+        doc.text('CA1 (30%)', 165, y + 5);
+        doc.text('CA2 (30%)', 245, y + 5);
+        doc.text('Exam (40%)', 325, y + 5);
+        doc.text('Total', 410, y + 5);
+        doc.text('Grade', 485, y + 5);
+        
+        y += 20;
+        
+        // Table Rows
+        doc.fontSize(9).font('Helvetica').fillColor('#333333');
+        let rowColor = false;
         Object.entries(subjectTotals).forEach(([subject, scores]) => {
-            y = doc.y;
-            doc.text(subject, 50, y);
-            doc.text(scores.ca1 || '-', 250, y);
-            doc.text(scores.ca2 || '-', 320, y);
-            doc.text(scores.exam || '-', 390, y);
-            doc.text(scores.total.toString(), 460, y);
-            doc.moveDown();
+            const total = scores.total;
+            const maxTotal = (scores.ca1 ? 30 : 0) + (scores.ca2 ? 30 : 0) + (scores.exam ? 40 : 0);
+            const percentage = maxTotal > 0 ? (total / maxTotal) * 100 : 0;
+            let subjectGrade = 'N/A';
+            if (percentage >= 80) subjectGrade = 'A';
+            else if (percentage >= 70) subjectGrade = 'B';
+            else if (percentage >= 50) subjectGrade = 'C';
+            else if (percentage >= 40) subjectGrade = 'D';
+            else if (percentage > 0) subjectGrade = 'F';
+            
+            if (rowColor) {
+                doc.rect(50, y - 2, 495, 18).fill('#f5f5f5');
+            }
+            doc.fillColor('#333333');
+            doc.text(subject, 55, y);
+            doc.text(scores.ca1 ? scores.ca1.toString() : '-', 175, y);
+            doc.text(scores.ca2 ? scores.ca2.toString() : '-', 255, y);
+            doc.text(scores.exam ? scores.exam.toString() : '-', 335, y);
+            doc.text(total.toString(), 415, y);
+            doc.text(subjectGrade, 495, y);
+            y += 18;
+            rowColor = !rowColor;
         });
         
-        doc.moveDown();
+        y += 10;
         
-        // Summary
-        doc.text(`Total Marks: ${overallTotal}`);
-        doc.text(`Average Score: ${overallAverage.toFixed(2)}%`);
-        doc.text(`Grade: ${grade}`);
-        doc.text(`Class Position: ${position}`);
+        // Summary Section
+        doc.fontSize(10).font('Helvetica-Bold').fillColor('#333333').text('SUMMARY', 50, y);
+        doc.moveTo(50, y + 8).lineTo(545, y + 8).stroke();
         
-        doc.moveDown();
-        doc.fontSize(10).text('* This is an official document of Ikonex Academy', { align: 'center' });
+        y += 20;
+        const summaryY = y;
+        
+        doc.fontSize(10).font('Helvetica');
+        doc.text('Total Marks Obtained:', 60, summaryY);
+        doc.text(`${overallTotal} / ${subjectCount * 100}`, 220, summaryY);
+        
+        doc.text('Overall Percentage:', 60, summaryY + 18);
+        const percentage = subjectCount > 0 ? (overallTotal / (subjectCount * 100)) * 100 : 0;
+        doc.text(`${percentage.toFixed(1)}%`, 220, summaryY + 18);
+        
+        doc.text('Grade:', 60, summaryY + 36);
+        const gradeColor = grade === 'A' ? '#2e7d32' : grade === 'B' ? '#1565c0' : grade === 'C' ? '#ed6c02' : grade === 'D' ? '#ed6c02' : '#d32f2f';
+        doc.fillColor(gradeColor).text(grade, 220, summaryY + 36);
+        
+        doc.fillColor('#333333');
+        doc.text('Class Position:', 350, summaryY);
+        doc.text(position === 'N/A' ? 'Not Ranked' : `${position} of ${subjectCount}`, 460, summaryY);
+        
+        doc.text('Subjects Offered:', 350, summaryY + 18);
+        doc.text(`${subjectCount}`, 460, summaryY + 18);
+        
+        // Footer
+        const footerY = doc.page.height - 50;
+        doc.fontSize(8).fillColor('#999999').text('This is an electronically generated report card. No signature is required.', 50, footerY, { align: 'center', width: 495 });
+        doc.text(`Generated on ${new Date().toLocaleString()}`, 50, footerY + 15, { align: 'center', width: 495 });
         
         doc.end();
         
@@ -144,16 +192,13 @@ router.get('/student-report/:studentId', async (req, res) => {
     }
 });
 
-// Generate class performance report
 router.get('/class-report/:streamId', async (req, res) => {
     try {
         const { streamId } = req.params;
         
-        // Get stream info
         const [streamRows] = await pool.query('SELECT * FROM streams WHERE id = ?', [streamId]);
         const streamName = streamRows[0]?.name || 'Unknown Stream';
         
-        // Get all students in stream with their totals
         const [students] = await pool.query(`
             SELECT 
                 s.id,
@@ -168,8 +213,7 @@ router.get('/class-report/:streamId', async (req, res) => {
             ORDER BY total_marks DESC
         `, [streamId]);
         
-        // Create PDF
-        const doc = new PDFDocument({ margin: 50 });
+        const doc = new PDFDocument({ margin: 50, size: 'A4', layout: 'landscape' });
         
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', `attachment; filename=class_report_${streamName}.pdf`);
@@ -177,39 +221,65 @@ router.get('/class-report/:streamId', async (req, res) => {
         doc.pipe(res);
         
         // Header
-        doc.fontSize(20).text('IKONEX ACADEMY', { align: 'center' });
-        doc.fontSize(14).text(`Class Performance Report - ${streamName}`, { align: 'center' });
-        doc.text(`Generated: ${new Date().toLocaleDateString()}`, { align: 'center' });
+        doc.fontSize(22).font('Helvetica-Bold').fillColor('#1a237e').text('IKONEX ACADEMY', { align: 'center' });
+        doc.fontSize(14).fillColor('#666666').text(`Class Performance Report - ${streamName}`, { align: 'center' });
+        doc.fontSize(10).fillColor('#999999').text(`Generated: ${new Date().toLocaleDateString()}`, { align: 'center' });
         doc.moveDown();
         
-        // Student Rankings Table
-        doc.fontSize(12).text('Student Rankings:', { underline: true });
-        doc.moveDown(0.5);
+        // Table Header
+        let y = doc.y + 10;
+        doc.fontSize(10).font('Helvetica-Bold').fillColor('#ffffff');
+        doc.rect(50, y, 50, 25).fill('#1a237e');
+        doc.rect(100, y, 120, 25).fill('#1a237e');
+        doc.rect(220, y, 180, 25).fill('#1a237e');
+        doc.rect(400, y, 100, 25).fill('#1a237e');
+        doc.rect(500, y, 95, 25).fill('#1a237e');
         
-        // Table headers
-        let y = doc.y;
-        doc.text('Rank', 50, y);
-        doc.text('Admission No', 100, y);
-        doc.text('Student Name', 200, y);
-        doc.text('Total Marks', 400, y);
-        doc.text('Average', 470, y);
+        doc.fillColor('#ffffff').text('Rank', 65, y + 7);
+        doc.text('Admission Number', 130, y + 7);
+        doc.text('Student Name', 270, y + 7);
+        doc.text('Total Marks', 440, y + 7);
+        doc.text('Average', 535, y + 7);
         
-        doc.moveDown();
+        y += 25;
         
-        // Table rows
+        // Table Rows
+        doc.fontSize(9).font('Helvetica').fillColor('#333333');
+        let rowColor = false;
         students.forEach((student, index) => {
-            y = doc.y;
-            doc.text((index + 1).toString(), 50, y);
-            doc.text(student.admission_number, 100, y);
-            doc.text(student.full_name.substring(0, 25), 200, y);
-            doc.text(student.total_marks.toString(), 400, y);
-            doc.text(student.average_score ? student.average_score.toFixed(2) + '%' : '0%', 470, y);
-            doc.moveDown();
+            if (rowColor) {
+                doc.rect(50, y - 2, 545, 22).fill('#f5f5f5');
+            }
+            doc.fillColor('#333333');
+            doc.text((index + 1).toString(), 70, y);
+            doc.text(student.admission_number, 140, y);
+            doc.text(student.full_name.substring(0, 30), 260, y);
+            doc.text(student.total_marks.toString(), 435, y);
+            const avgDisplay = student.average_score ? student.average_score.toFixed(1) + '%' : '0%';
+            doc.text(avgDisplay, 530, y);
+            y += 22;
+            rowColor = !rowColor;
+            
+            if (y > doc.page.height - 50) {
+                doc.addPage();
+                y = 50;
+            }
         });
         
+        // Summary
+        const totalStudents = students.length;
+        const avgClassScore = students.reduce((sum, s) => sum + (s.average_score || 0), 0) / (totalStudents || 1);
+        
         doc.moveDown();
-        doc.fontSize(10).text(`Total Students: ${students.length}`, { align: 'center' });
-        doc.text('* This is an official document of Ikonex Academy', { align: 'center' });
+        doc.fontSize(10).font('Helvetica-Bold').fillColor('#1a237e').text('Summary Statistics', 50, y + 10);
+        doc.fontSize(10).font('Helvetica').fillColor('#333333');
+        doc.text(`Total Students: ${totalStudents}`, 60, y + 30);
+        doc.text(`Class Average: ${avgClassScore.toFixed(1)}%`, 60, y + 45);
+        doc.text(`Top Student: ${students[0]?.full_name || 'N/A'} (${students[0]?.total_marks || 0} marks)`, 60, y + 60);
+        
+        // Footer
+        const footerY = doc.page.height - 40;
+        doc.fontSize(8).fillColor('#999999').text('This is an electronically generated class performance report.', 50, footerY, { align: 'center', width: 545 });
         
         doc.end();
         
